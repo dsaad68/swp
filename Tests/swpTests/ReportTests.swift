@@ -83,3 +83,28 @@ final class ReportTests: XCTestCase {
         XCTAssertTrue(line.contains("sudo"))
     }
 }
+
+extension ReportTests {
+
+    /// The table shows CPU when a rate was measured; the JSON must agree, or
+    /// `swp --json --cpu | jq` silently has no CPU in it.
+    func testJSONCarriesCPUWhenItWasMeasured() throws {
+        var busy = record
+        busy.cpuPercent = 42.5
+        busy.cpuSeconds = 1234.5
+        let parsed = try XCTUnwrap(
+            JSONSerialization.jsonObject(with: Data(Report.json(for: [busy]).utf8)) as? [[String: Any]]
+        )
+        XCTAssertEqual(parsed[0]["cpu_percent"] as? Double, 42.5)
+        XCTAssertEqual(parsed[0]["cpu_seconds"] as? Double, 1234.5)
+    }
+
+    /// …and omits it when there was none. A key that is sometimes a number and
+    /// sometimes a zero-meaning-unknown is worse than an absent one.
+    func testJSONOmitsCPUWhenItWasNotMeasured() throws {
+        let parsed = try XCTUnwrap(
+            JSONSerialization.jsonObject(with: Data(Report.json(for: [record]).utf8)) as? [[String: Any]]
+        )
+        XCTAssertNil(parsed[0]["cpu_percent"])
+    }
+}

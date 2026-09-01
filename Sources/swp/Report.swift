@@ -80,6 +80,12 @@ enum Report {
                 },
             ]
             if let memory = record.memoryBytes { object["memory_bytes"] = Int(memory) }
+            // Present only when a rate was actually measured, for the same
+            // reason the column is: a key that is sometimes a number and
+            // sometimes a zero-that-means-unknown is worse than an absent one,
+            // and `jq` can ask whether it is there.
+            if let cpu = record.cpuPercent { object["cpu_percent"] = cpu }
+            if let cpuSeconds = record.cpuSeconds { object["cpu_seconds"] = cpuSeconds }
             if let start = record.startTime { object["started"] = formatter.string(from: start) }
             return object
         }
