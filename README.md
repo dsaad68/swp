@@ -108,7 +108,7 @@ in its footer rather than leaving you to wonder why `sudo lsof` disagrees.
 There is **no per-process network or GPU figure** available to a program like
 this on either platform — both need private frameworks or a root packet
 capture. `swp --net` and `swp --gpu` explain that rather than failing as unknown
-options. [Details in the guide.](docs/guide.md#what-swp-cant-see)
+options. [Details in the guide.](docs/guide.md#8-what-swp-cant-see)
 
 ## Development
 
