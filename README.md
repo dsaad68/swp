@@ -44,22 +44,43 @@ run from a clone without installing:
 
 ```sh
 just swp              # the picker
-just swp 3000         # what's on 3000
-just swp -l node      # print, don't pick
+just swp 3000         # what's on 3000, printed
+just swp -i node      # the picker, narrowed to node
 ```
 
 ## Use
 
 ```sh
 swp                   # pick from everything holding a port
-swp 3000              # whatever is on port 3000
-swp node              # processes named — or running — node
-swp -a                # every process, port or not
-swp -l 3000           # print the matches instead of picking
+swp 3000              # print whatever is on port 3000, and exit
+swp node              # print processes named — or running — node
+swp -a                # pick from every process, port or not
+swp -i 3000           # open the picker on port 3000 instead
 swp -k 3000           # kill what's on port 3000 (asks first)
 swp -k -9 -y node     # SIGKILL every node, without asking
 swp --json --me       # your processes, machine-readable
 ```
+
+### A question answers; a browse opens the picker
+
+`swp` with nothing to look for is a browse, and opens the list. `swp 3000` is a
+question, and gets an answer on stdout:
+
+```console
+$ swp -p 3000
+PORT    PID  USER   MEM  UP  NAME  COMMAND
+3000  49649  dsaad  66M  1d  bun   --hot scripts/serve.ts
+```
+
+So a query works inside a pipeline, a script, `$( )` and a `Makefile` without
+anyone reaching for a flag — which is the behaviour a command-line tool is
+expected to have, and the reason `-l` is almost never needed. `-i` asks for the
+picker anyway, for when the query is a starting point rather than the whole
+question: `swp -i node` opens the list already narrowed, ready for another
+keystroke.
+
+Filters are not a query. `--me`, `-u` and `-a` narrow a browse rather than
+naming a target, so they still open the picker.
 
 ### The query
 
@@ -115,6 +136,7 @@ other key cancels, so a stray keystroke can only ever be the safe answer.
       --me           Only your own processes
   -a, --all          Include processes that hold no port
   -l, --list         Print the matches and exit — never open the picker
+  -i, --pick         Open the picker even though a query was given
   -k, --kill         Signal the matches and exit
   -s, --signal NAME  HUP, INT, QUIT, KILL, TERM, STOP, CONT, USR1, USR2
   -9                 Shorthand for --signal KILL
@@ -127,12 +149,14 @@ other key cancels, so a stray keystroke can only ever be the safe answer.
 ```
 
 Exit code is `0` when something matched (and every signal landed), `1` when
-nothing matched or a signal failed — so `swp -l 3000 || echo free` works.
+nothing matched or a signal failed — so `swp 3000 >/dev/null || echo free`
+works, and so does `kill $(swp --json 3000 | jq '.[].pid')` if you like doing
+it the long way.
 
 ### Redirected output
 
-With stdout or stdin redirected there is no keyboard UI to run, so `swp | grep`
-prints the listing instead of opening the picker. Colour turns itself off in a
+With stdout or stdin redirected there is no keyboard UI to run, so even a bare
+`swp | grep` prints the listing instead of opening the picker — as does `-i`. Colour turns itself off in a
 pipe, trailing padding is trimmed, and nothing is truncated — `swp -l -a` is
 meant to be piped into things.
 

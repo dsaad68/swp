@@ -60,9 +60,14 @@ func matches() -> (records: [ProcessRecord], incomplete: Bool) {
 /// that the process holds no port and `-a` was not given.
 func explainEmpty(incomplete: Bool) {
     var reasons: [String] = []
-    if !options.query.isEmpty { reasons.append("nothing matches that query") }
-    else { reasons.append("nothing is listening") }
-    if !options.includePortless { reasons.append("processes with no port are hidden — add -a") }
+    reasons.append(options.query.isEmpty ? "nothing is listening" : "nothing matches that query")
+    // The `-a` hint belongs only to a bare browse. A named target already
+    // implies it, and telling someone whose `swp 9999` found nothing that
+    // portless processes are hidden is worse than saying nothing: no portless
+    // process could ever match a port.
+    if options.query.isEmpty, !options.includePortless {
+        reasons.append("processes with no port are hidden — add -a")
+    }
     if incomplete { reasons.append("other users' ports need sudo") }
     FileHandle.standardError.write(Data(("swp: " + reasons.joined(separator: "; ") + "\n").utf8))
 }

@@ -6,6 +6,24 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Changed
+- **A query now answers and exits instead of opening the picker.** `swp 3000`
+  and `swp -p 3000` print the matching rows to stdout and stop; only a bare
+  `swp` — nothing named, nothing to look up — takes over the terminal. A
+  command-line tool is expected to work inside a pipeline, a script and a
+  subshell without a flag for it, and requiring `-l` to get an answer made the
+  common case the awkward one.
+
+  `-i` / `--pick` opens the picker anyway, for when the query is a starting
+  point rather than the whole question: `swp -i node` opens the list already
+  narrowed. Filters (`--me`, `-u`, `-a`) are not queries — they narrow a browse
+  rather than naming a target, so they still open the picker.
+
+### Fixed
+- The empty-result message no longer suggests `-a` after a *port* query. No
+  portless process can match a port, so "processes with no port are hidden" was
+  worse than saying nothing there.
+
 ## [0.1.0] - 2026-09-01
 
 First release.

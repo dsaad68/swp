@@ -78,6 +78,19 @@ run_with_timeout() { # run_with_timeout <seconds> <command…>
   wait "$pid"
 }
 
+# `-i` asks for the picker; redirected, it must still fall back to printing
+# rather than blocking on a key that cannot arrive.
+if run_with_timeout 10 "$BIN" -i 65533; then
+  pass=$((pass + 1)); printf '  ok   -i redirected falls back to printing\n'
+else
+  status=$?
+  if [ "$status" -eq 124 ]; then
+    fail=$((fail + 1)); printf '  FAIL -i hung on a pipe\n'
+  else
+    pass=$((pass + 1)); printf '  ok   -i redirected exits (%d)\n' "$status"
+  fi
+fi
+
 if run_with_timeout 10 "$BIN" -a; then
   pass=$((pass + 1)); printf '  ok   a redirected bare run lists instead of paging\n'
 else
@@ -90,6 +103,10 @@ else
 fi
 
 contains "-l lists with a header"       "PORT" "$BIN" -l -a
+# A query answers and exits, with no flag at all — the headless behaviour that
+# makes swp usable from a script.
+contains "a bare query prints a header"  "PORT" "$BIN" -a bash
+check    "a bare query exits 0"          0 "$BIN" -a bash
 contains "--json emits an array"        "\"pid\"" "$BIN" --json -a --me
 check    "a port nobody holds exits 1"  1 "$BIN" -l 65533
 

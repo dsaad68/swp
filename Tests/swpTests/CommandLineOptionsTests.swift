@@ -17,7 +17,9 @@ final class CommandLineOptionsTests: XCTestCase {
         return message
     }
 
-    func testDefaultsToThePicker() {
+    /// A bare `swp` is a browse: nothing was named, so there is nothing to
+    /// print, and the picker is the whole point.
+    func testABareRunOpensThePicker() {
         let options = parse()
         XCTAssertEqual(options.mode, .pick)
         XCTAssertTrue(options.query.isEmpty)
@@ -38,6 +40,37 @@ final class CommandLineOptionsTests: XCTestCase {
         XCTAssertEqual(options.query.ports, [8080, 3000])
         XCTAssertEqual(options.query.terms, ["bun"])
         XCTAssertEqual(options.query.pids, [42])
+    }
+
+    /// …and a query is a question, so it answers and exits. This is what lets
+    /// `swp 3000` be used in a pipeline, a script or a subshell without anyone
+    /// reaching for a flag.
+    func testAQueryPrintsInsteadOfPicking() {
+        XCTAssertEqual(parse("3000").mode, .list)
+        XCTAssertEqual(parse("-p", "3000").mode, .list)
+        XCTAssertEqual(parse("node").mode, .list)
+        XCTAssertEqual(parse("--pid", "42").mode, .list)
+        // Filters are not a query: they narrow a browse, they do not name a
+        // target, so they still open the picker.
+        XCTAssertEqual(parse("--me").mode, .pick)
+        XCTAssertEqual(parse("-a").mode, .pick)
+    }
+
+    /// `-i` asks for the picker anyway, when the query is a starting point
+    /// rather than the whole question.
+    func testPickCanBeAskedForWithAQuery() {
+        XCTAssertEqual(parse("-i", "3000").mode, .pick)
+        XCTAssertEqual(parse("--pick", "node").mode, .pick)
+        XCTAssertEqual(parse("-i", "3000").query, Query(ports: [3000]))
+        // …and it is a mode like the others, so it cannot be combined with one.
+        XCTAssertNotNil(failure("-i", "-k"))
+        XCTAssertNotNil(failure("-l", "--pick"))
+    }
+
+    /// An explicit mode always wins over the query rule.
+    func testAnExplicitModeSurvivesAQuery() {
+        XCTAssertEqual(parse("-k", "3000").mode, .kill)
+        XCTAssertEqual(parse("-l", "3000").mode, .list)
     }
 
     func testModes() {

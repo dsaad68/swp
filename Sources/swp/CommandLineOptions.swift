@@ -18,6 +18,11 @@ struct Options: Equatable {
         case kill
     }
 
+    /// What to do, once the query is known.
+    ///
+    /// The default is not fixed: `swp` with nothing to look for is a browse and
+    /// opens the picker, and `swp 3000` is a question and gets an answer. See
+    /// the note at the end of `parse`.
     var mode: Mode = .pick
     var query = Query()
     var includePortless = false
@@ -104,6 +109,8 @@ struct Options: Equatable {
                 options.includePortless = true
             case "-l", "--list":
                 if let conflict = claimMode(.list, arg) { return .failure(message: conflict, code: 1) }
+            case "-i", "--pick":
+                if let conflict = claimMode(.pick, arg) { return .failure(message: conflict, code: 1) }
             case "-k", "--kill":
                 if let conflict = claimMode(.kill, arg) { return .failure(message: conflict, code: 1) }
 
@@ -168,6 +175,20 @@ struct Options: Equatable {
         if !options.query.terms.isEmpty || !options.query.pids.isEmpty {
             options.includePortless = true
         }
+
+        // A query is a question, and a question deserves an answer, not a
+        // full-screen program. `swp 3000` prints what is on 3000 and exits;
+        // only a bare `swp` — nothing named, nothing to look up — takes over
+        // the terminal to browse. That keeps the tool usable inside a pipeline,
+        // a script and a subshell without anyone reaching for a flag, which is
+        // the behaviour a command-line tool is expected to have.
+        //
+        // `-i` asks for the picker anyway, when the query is a starting point
+        // rather than the whole question: `swp -i node` opens the list already
+        // narrowed, ready for another keystroke.
+        if modeNamedBy == nil, !options.query.isEmpty {
+            options.mode = .list
+        }
         return .success(options)
     }
 
@@ -178,11 +199,15 @@ struct Options: Equatable {
 
     USAGE: swp [options] [query …]
            swp                     pick from everything holding a port
-           swp 3000                whatever is on port 3000
-           swp node                processes named — or running — node
-           swp -a                  every process, port or not
-           swp -l 3000             print the matches instead of picking
+           swp 3000                print whatever is on port 3000, and exit
+           swp node                print processes named — or running — node
+           swp -a                  pick from every process, port or not
+           swp -i 3000             open the picker on port 3000 instead
            swp -k 3000             kill what's on port 3000
+
+    A query answers and exits; a bare `swp` opens the picker. So `swp 3000`
+    prints, and pipes and scripts need no flag — while `swp` alone still
+    browses, and `-i` opens the picker on a query.
 
     QUERY:
       A bare number is a port; above \(Query.maxPort) it is a process id. Any
@@ -199,6 +224,7 @@ struct Options: Equatable {
                          a name or --pid is given: only a browse is narrowed to
                          listeners
       -l, --list         Print the matches and exit — never open the picker
+      -i, --pick         Open the picker even though a query was given
       -k, --kill         Signal the matches and exit
       -s, --signal NAME  Signal to send: \(Signal.known.map(\.name).joined(separator: ", "))
                          (default: TERM)
