@@ -36,6 +36,10 @@ struct ProcessMenu {
     // MARK: - State
 
     private var all: [ProcessRecord] = []
+    /// Every record in display order, each with its rendered row text — the
+    /// input the filter runs over. Rebuilt when the *list* changes (a scan, a
+    /// new sort order, a resize), never when a key is typed.
+    private var candidates: [(record: ProcessRecord, label: String)] = []
     private var rows: [Row] = []
     /// Column widths, recomputed on each scan from every record — not from the
     /// filtered ones, so the table holds still while a filter is typed.
@@ -87,7 +91,16 @@ struct ProcessMenu {
             let size = Terminal.size()
             if Terminal.didResize || size != lastSize {
                 Terminal.didResize = false
+                let widthChanged = size.cols != lastSize.cols
                 lastSize = size
+                // The column widths and the rendered rows are sized to the
+                // terminal, and they are no longer rebuilt on every keystroke —
+                // so a resize has to say so, or the table would keep the old
+                // width until the next scan up to two seconds later.
+                if widthChanged {
+                    rebuildCandidates()
+                    applyFilter()
+                }
                 needsRedraw = true
             }
 
@@ -190,6 +203,7 @@ struct ProcessMenu {
             refresh()
         case .char("s") where !searching:
             sort = sort.next
+            rebuildCandidates()
             applyFilter()
         case .char("r") where !searching:
             refresh()
@@ -236,20 +250,31 @@ struct ProcessMenu {
         )
         all = initialQuery.filter(result.processes)
         portsIncomplete = result.portsIncomplete
+        rebuildCandidates()
         applyFilter()
         if let keep, let at = rows.firstIndex(where: { $0.record.pid == keep }) { selected = at }
     }
 
-    private mutating func applyFilter() {
+    /// Sort the records and render each one's row text.
+    ///
+    /// Split out from `applyFilter` because none of it depends on the filter,
+    /// and all of it used to run on every keystroke: with `-a` on a busy
+    /// machine that was a 1000-element sort of an already-sorted array (1.3 ms)
+    /// plus a thousand command lines joined and padded, thrown away and rebuilt
+    /// on the next letter. It changes when the list does — a scan, a new sort
+    /// order, a resize — so that is when it runs.
+    private mutating func rebuildCandidates() {
         let now = Date()
-        let sorted = all.sorted(by: sort)
         widths = TableLayout.widths(for: all, totalWidth: contentWidth, now: now)
-        let labelled = sorted.map { record in
+        candidates = all.sorted(by: sort).map { record in
             (record, TableLayout.plainRow(cells: TableLayout.cells(for: record, now: now),
                                           widths: widths))
         }
-        rows = FuzzyMatch.filterAndSort(labelled, query: filter, label: \.1)
-            .map { Row(record: $0.item.0, label: $0.item.1, indices: $0.indices) }
+    }
+
+    private mutating func applyFilter() {
+        rows = FuzzyMatch.filterAndSort(candidates, query: filter, label: \.label)
+            .map { Row(record: $0.item.record, label: $0.item.label, indices: $0.indices) }
         // A filter that just got narrower can leave the cursor past the end;
         // clamping happens in the loop, but the top must not be left stranded
         // below it or the first frame after a keystroke scrolls for no reason.
@@ -357,6 +382,7 @@ struct ProcessMenu {
     /// process table underneath it, which would make any such test a coin toss.
     mutating func loadForTesting(_ records: [ProcessRecord]) {
         all = initialQuery.filter(records)
+        rebuildCandidates()
         applyFilter()
     }
 

@@ -134,3 +134,38 @@ extension MenuFrameTests {
         XCTAssertEqual(menu.queryDescription, "port 3000 and pid 42 and \"node\"")
     }
 }
+
+extension MenuFrameTests {
+
+    /// Sorting and row rendering moved out of the keystroke path, so the two
+    /// things that used to be rebuilt per letter now happen per scan. This
+    /// pins the behaviour that move could break: the rows must still be in
+    /// sort order, and still carry the filter's match offsets.
+    func testFilteringPreservesOrderAndMatchOffsets() {
+        var menu = menu()
+        menu.filterForTesting("post")
+        let rows = menu.visibleRows
+        XCTAssertEqual(rows.count, 1)
+        XCTAssertEqual(rows[0].record.name, "postgres")
+        XCTAssertFalse(rows[0].indices.isEmpty, "a filtered row carries its match offsets")
+        // Every offset must be inside the row it will be painted on, or the
+        // highlight lands on a different column than the one that matched.
+        for index in rows[0].indices {
+            XCTAssertLessThan(index, rows[0].label.count)
+        }
+
+        // Clearing the filter restores every row, in sort order.
+        menu.filterForTesting("")
+        XCTAssertEqual(menu.visibleRows.map(\.record.pid), [100, 200])
+    }
+
+    /// The rows are rendered to a width now, not per keystroke, so a row's text
+    /// must still match the columns the header advertises.
+    func testRenderedRowsMatchTheHeaderWidth() {
+        let menu = menu(width: 100)
+        let header = TableLayout.plainHeader(widths: menu.columnWidths)
+        for row in menu.visibleRows {
+            XCTAssertEqual(Ansi.displayWidth(row.label), Ansi.displayWidth(header))
+        }
+    }
+}
