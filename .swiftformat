@@ -1,0 +1,14 @@
+# SwiftFormat configuration for swp.
+# Run `just format` to apply, `just format-check` to verify (used in CI).
+#
+# Like termdown, swp uses a deliberately compact style — single-line function
+# bodies, hand-aligned tables, `&&` in conditions. So this runs an explicit
+# allowlist of *hygiene-only* rules and lets nothing else reshape the code.
+
+--swiftversion 5.9
+--exclude .build,Release
+
+--rules trailingSpace,consecutiveBlankLines,linebreakAtEndOfFile,duplicateImports,emptyBraces,spaceInsideBraces,spaceInsideBrackets,spaceInsideParens,redundantBreak,redundantNilInit,trailingCommas
+
+--trimwhitespace always
+--emptybraces no-space

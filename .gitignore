@@ -1,0 +1,24 @@
+# Swift Package Manager
+.build/
+.swiftpm/
+*.xcodeproj
+*.xcworkspace
+
+# Package.resolved is deliberately NOT ignored. swp is an executable, so the
+# exact dependency versions it was built and tested against belong in the repo
+# — same call termdown makes. (It has no dependencies today, so the file does
+# not exist yet; this is here so adding one does the right thing by default.)
+
+# The installed release binary (built by `just install`, not source)
+Release/
+
+# macOS
+.DS_Store
+
+# Editors
+.vscode/
+.idea/
+*.swp
+
+# Local agent/board state
+.dangerboard/

@@ -1,0 +1,59 @@
+# SwiftLint configuration for swp.
+# Run `just lint` locally; CI runs `swiftlint --strict` (warnings fail the build).
+#
+# SwiftFormat owns pure formatting, so rules that would fight it — or the
+# codebase's aligned palette tables and vertical else branches — are off here.
+# What is left are correctness and smell rules.
+
+excluded:
+- .build
+- Release
+
+disabled_rules:
+- trailing_comma # SwiftFormat owns trailing commas (mandatory)
+- opening_brace # brace placement owned by SwiftFormat
+- todo # TODO/FIXME notes are allowed
+- blanket_disable_command
+- colon # palette tables are colon-aligned on purpose
+- comma # dense numeric tables (the 256-colour cube)
+- statement_position # vertical `} \n else if` branch layout is intentional
+- function_parameter_count # the draw helpers pass render state as many params
+
+identifier_name:
+  min_length:
+    warning: 1 # r, g, b, x, y, fd … are intentional
+    error: 1
+  max_length:
+    warning: 50
+    error: 60
+
+type_name:
+  min_length:
+    warning: 2
+    error: 1
+
+line_length:
+  warning: 140
+  error: 200
+  ignores_comments: true
+  ignores_urls: true
+
+file_length:
+  warning: 400
+  error: 600
+
+type_body_length:
+  warning: 400
+  error: 600
+
+function_body_length:
+  warning: 120
+  error: 200
+
+cyclomatic_complexity:
+  warning: 60
+  error: 100
+
+large_tuple:
+  warning: 4
+  error: 6
