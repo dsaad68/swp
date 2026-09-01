@@ -18,7 +18,7 @@ enum HelpText {
             "Esc           Leave the box, then clear it, then quit",
             "a             Every process / only the ones holding a port",
             "m             Only mine / every user",
-            "s             Change the sort order",
+            "s             Sort: port, pid, name, cpu, memory, started",
             "r             Re-scan now (it also re-scans every 2s)",
         ]),
         ("Act", [

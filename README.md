@@ -58,8 +58,40 @@ swp -a                # pick from every process, port or not
 swp -i 3000           # open the picker on port 3000 instead
 swp -k 3000           # kill what's on port 3000 (asks first)
 swp -k -9 -y node     # SIGKILL every node, without asking
+swp --cpu --top 5     # the five busiest processes
+swp --ram -t 10       # the ten largest by memory
 swp --json --me       # your processes, machine-readable
 ```
+
+### CPU and memory
+
+`--cpu` sorts by CPU share and `--ram` by resident memory, busiest and largest
+first. Both imply `-a`: "what is eating my CPU" is a question about the machine,
+not about its listeners, and answering it from among the processes that happen
+to hold a port would be a strange reading. `--sort cpu` stays a pure sort
+modifier for anyone who *did* mean it about listeners only.
+
+`-t` / `--top N` keeps the first N rows after sorting — and prints them, since a
+quantity of answer only means something in output.
+
+```console
+$ swp --cpu --top 5
+PORT    PID  USER    CPU   MEM  UP   NAME                        COMMAND
+-     18966  dsaad  1.3%   26M  2s   mdworker_shared             -s mdworker -c MDSImporter…
+-     66539  dsaad  1.0%  964M  54m  Code - Insiders Helper (R…  /Applications/Visual Studi…
+-     83988  dsaad  0.4%  941M  3d   Google Chrome               /Applications/Google Chrom…
+```
+
+CPU is a **share of one core over a sampled interval**, the way `top` reports it,
+so it exceeds 100% for a process using more than one. It cannot be read from a
+single sample — macOS's `kinfo_proc.p_pctcpu` is hard zero on anything modern
+and Linux publishes only a cumulative counter — so asking for it on the command
+line costs a second sample, about a quarter of a second. The picker re-scans
+every two seconds anyway, so there the column is free and always shown.
+
+The alternative, total CPU time over the process's whole lifetime, needs one
+sample but answers a different question: a tab that pinned a core last Tuesday
+would outrank the one pinning it right now.
 
 ### A question answers; a browse opens the picker
 
@@ -141,7 +173,10 @@ other key cancels, so a stray keystroke can only ever be the safe answer.
   -s, --signal NAME  HUP, INT, QUIT, KILL, TERM, STOP, CONT, USR1, USR2
   -9                 Shorthand for --signal KILL
   -y, --yes          Do not ask before signalling
-      --sort ORDER   port, pid, name, memory, started (default: port)
+      --cpu          Busiest first, across every process (= --sort cpu -a)
+      --ram          Largest first, across every process (= --sort memory -a)
+  -t, --top N        Keep only the first N rows, and print them
+      --sort ORDER   port, pid, name, cpu, memory, started (default: port)
       --json         Machine-readable listing (implies --list)
       --width N      Output width (default: auto-detect)
       --theme NAME   dark, light, mono
@@ -162,10 +197,33 @@ meant to be piped into things.
 
 ## What it can't see
 
+### Other users' processes
+
 On macOS the kernel will not open another user's file descriptors without root,
-so **the ports of other users' processes are invisible** — their rows are there,
-their PORT column is not. `sudo swp` sees everything. The picker says so in its
-footer rather than leaving you to wonder why `sudo lsof` disagrees.
+so **the ports, memory and CPU of other users' processes are invisible** — their
+rows are there, those columns are not. `sudo swp` sees everything. The picker
+says so in its footer rather than leaving you to wonder why `sudo lsof`
+disagrees. On this machine that is 204 processes refused against 887 readable.
+
+### Network and GPU, at all
+
+There is no per-process **network** or **GPU** figure available to a program
+like this, on either platform, and `swp --net` / `swp --gpu` say so rather than
+failing as unknown options:
+
+- **Network.** macOS publishes per-process bytes only through
+  `NetworkStatistics.framework`, which is private API — it is what `nettop` and
+  Activity Monitor use. Linux has no per-process byte counter at all;
+  `/proc/<pid>/net/dev` is per network *namespace*, not per process, so tools
+  like `nethogs` capture packets and attribute them by socket inode, which
+  needs root.
+- **GPU.** Activity Monitor reads per-process GPU through private
+  `IOAccelerator` accounting. The public IOKit registry reports per-*device*
+  utilisation only. On Linux it exists per vendor — NVML, and NVIDIA only.
+
+Shipping either would mean a private framework, a packet capture running as
+root, or a number that looks right and isn't. `swp` still tells you which ports
+a process holds, which is usually the network question actually being asked.
 
 The same call that would refuse those descriptors also refuses `proc_pidinfo`
 for the process itself, which is why enumeration goes through

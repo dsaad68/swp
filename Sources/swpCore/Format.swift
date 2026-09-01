@@ -25,6 +25,19 @@ public enum Format {
             : String(format: "%.0f%@", size, units[unit])
     }
 
+    /// A CPU share as a percentage of one core: `4.2%`, `137%`, `-` when the
+    /// kernel would not say.
+    ///
+    /// A decimal only below 10, so the column stays four or five characters
+    /// wide for everything real while still telling 0.4% from 4%. Above 100 the
+    /// decimal is noise — a process using more than one core is the answer
+    /// whether it is at 137% or 141%.
+    public static func percent(_ value: Double?) -> String {
+        guard let value else { return "-" }
+        if value < 0.05 { return "0%" }
+        return value < 10 ? String(format: "%.1f%%", value) : String(format: "%.0f%%", value)
+    }
+
     /// How long ago `date` was, coarsely: `3s`, `12m`, `4h`, `9d`.
     ///
     /// Uptime is read to answer "is this the server I just started, or the one

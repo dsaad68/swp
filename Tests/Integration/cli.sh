@@ -110,6 +110,25 @@ check    "a bare query exits 0"          0 "$BIN" -a bash
 contains "--json emits an array"        "\"pid\"" "$BIN" --json -a --me
 check    "a port nobody holds exits 1"  1 "$BIN" -l 65533
 
+# ── Resource sorting and --top ──
+contains "--cpu prints a CPU column"     "CPU" "$BIN" --cpu --top 5
+check    "--cpu --top 5 exits 0"         0 "$BIN" --cpu --top 5
+check    "--ram -t 10 exits 0"           0 "$BIN" --ram -t 10
+contains "--ram has no CPU column"       "MEM" "$BIN" --ram -t 3
+check    "--top 0 is rejected"           1 "$BIN" --top 0
+# --top really limits: header plus N rows.
+rows=$("$BIN" --ram -t 3 | wc -l | tr -d ' ')
+if [ "$rows" = "4" ]; then
+  pass=$((pass + 1)); printf '  ok   --top 3 prints 3 rows and a header\n'
+else
+  fail=$((fail + 1)); printf '  FAIL --top 3 printed %s lines, wanted 4\n' "$rows"
+fi
+# The two metrics that cannot be had must say why rather than "unknown option".
+check    "--net exits 1"                 1 "$BIN" --net
+contains "--net explains itself"         "not available" "$BIN" --net
+check    "--gpu exits 1"                 1 "$BIN" --gpu
+contains "--gpu explains itself"         "not available" "$BIN" --gpu
+
 # ── Acting on something we own, and nothing else ──
 # A sleep of our own is the only safe target: it is ours, it is disposable, and
 # its pid is known exactly.

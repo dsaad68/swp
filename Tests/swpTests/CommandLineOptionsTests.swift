@@ -161,3 +161,69 @@ extension CommandLineOptionsTests {
         XCTAssertFalse(parse("-p", "3000").includePortless)
     }
 }
+
+extension CommandLineOptionsTests {
+
+    func testResourceShorthands() {
+        XCTAssertEqual(parse("--cpu").sort, .cpu)
+        XCTAssertEqual(parse("--ram").sort, .memory)
+        XCTAssertEqual(parse("--mem").sort, .memory)
+        XCTAssertEqual(parse("--sort", "cpu").sort, .cpu)
+    }
+
+    /// "What is eating my CPU" is a question about the machine, not about its
+    /// listeners, so the shorthands widen the view. `--sort cpu` stays a pure
+    /// modifier for anyone who did mean it about listeners only.
+    func testResourceShorthandsWidenTheView() {
+        XCTAssertTrue(parse("--cpu").includePortless)
+        XCTAssertTrue(parse("--ram").includePortless)
+        XCTAssertFalse(parse("--sort", "cpu").includePortless)
+    }
+
+    func testTop() {
+        XCTAssertEqual(parse("--top", "5").top, 5)
+        XCTAssertEqual(parse("-t", "10").top, 10)
+        XCTAssertNil(parse().top)
+        XCTAssertNotNil(failure("-t", "0"))
+        XCTAssertNotNil(failure("--top", "-3"))
+        XCTAssertNotNil(failure("--top"))
+    }
+
+    /// `--top N` names a quantity of *answer*, which only means something in
+    /// output — so it prints, even with nothing else on the line.
+    func testTopImpliesPrinting() {
+        XCTAssertEqual(parse("--cpu", "--top", "5").mode, .list)
+        XCTAssertEqual(parse("--ram", "-t", "10").mode, .list)
+        // A sort order alone is a browse, and a useful one.
+        XCTAssertEqual(parse("--cpu").mode, .pick)
+        // An explicit mode still wins.
+        XCTAssertEqual(parse("-i", "--top", "5").mode, .pick)
+    }
+
+    /// The user's two examples from the feature request, end to end.
+    func testTheRequestedInvocations() {
+        let cpu = parse("--cpu", "--top", "5")
+        XCTAssertEqual(cpu.mode, .list)
+        XCTAssertEqual(cpu.sort, .cpu)
+        XCTAssertEqual(cpu.top, 5)
+        XCTAssertTrue(cpu.includePortless)
+
+        let ram = parse("--ram", "-t", "10")
+        XCTAssertEqual(ram.mode, .list)
+        XCTAssertEqual(ram.sort, .memory)
+        XCTAssertEqual(ram.top, 10)
+    }
+
+    /// Network and GPU are real asks that no public interface can answer, so
+    /// they are recognised and explained rather than left as "unknown option".
+    func testNetworkAndGPUExplainThemselves() {
+        for flag in ["--net", "--network", "--gpu"] {
+            let message = failure(flag)
+            XCTAssertNotNil(message, "\(flag) should be recognised")
+            XCTAssertTrue(message?.contains("not available") ?? false,
+                          "\(flag) should say why, not just fail")
+        }
+        XCTAssertTrue(failure("--net")?.contains("NetworkStatistics") ?? false)
+        XCTAssertTrue(failure("--gpu")?.contains("IOAccelerator") ?? false)
+    }
+}

@@ -47,12 +47,48 @@ let outputWidth = options.width ?? (stdoutIsTTY ? Terminal.size().cols : 10_000)
 
 // MARK: - What to do
 
+/// Whether this run needs a CPU rate — and so a second sample.
+///
+/// Only when the sort asks for one. A rate cannot be read, it has to be
+/// measured across an interval, and making every `swp -p 3000` wait a quarter
+/// of a second for a column it did not ask for would be a poor trade for a
+/// lookup that otherwise answers in 30 ms.
+let needsCPU = options.sort == .cpu
+
+/// How long to wait between the two samples a CPU rate is measured over.
+///
+/// Long enough that a process which woke, worked and slept inside the window is
+/// represented fairly, short enough to feel like an answer rather than a job.
+/// `top -l 2` uses one second; a quarter is the shortest that still separates a
+/// busy process from a merely awake one.
+let cpuSampleInterval: TimeInterval = 0.25
+
 /// Scan and apply the command-line query, in the order the listing wants.
 func matches() -> (records: [ProcessRecord], incomplete: Bool) {
-    let result = ProcessScanner.scan(
-        .init(includePortless: options.includePortless, user: options.user)
-    )
-    return (options.query.filter(result.processes).sorted(by: options.sort), result.portsIncomplete)
+    let scanOptions = ProcessScanner.Options(includePortless: options.includePortless,
+                                             user: options.user)
+    var sampler = CPUSampler()
+    var result = ProcessScanner.scan(scanOptions)
+
+    if needsCPU {
+        // The first scan is only a baseline; its counters are cumulative and
+        // say nothing about now.
+        var baseline = result.processes
+        sampler.annotate(&baseline)
+        Thread.sleep(forTimeInterval: cpuSampleInterval)
+        result = ProcessScanner.scan(scanOptions)
+    }
+    sampler.annotate(&result.processes)
+
+    var records = options.query.filter(result.processes).sorted(by: options.sort)
+    // Applied after the sort, which is the only order in which "top 5" means
+    // anything, and after the filter, so `swp --cpu --top 5 node` is the five
+    // busiest *node* processes rather than whichever of the five busiest happen
+    // to be node.
+    if let top = options.top, records.count > top {
+        records = Array(records.prefix(top))
+    }
+    return (records, result.portsIncomplete)
 }
 
 /// Say why an empty result is empty. "Nothing found" is true but useless when
@@ -83,7 +119,9 @@ func runList() -> Never {
         explainEmpty(incomplete: incomplete)
         exit(1)
     }
-    for line in Report.lines(for: records, theme: theme, width: outputWidth) { print(line) }
+    for line in Report.lines(for: records, theme: theme, width: outputWidth, showCPU: needsCPU) {
+        print(line)
+    }
     exit(0)
 }
 
@@ -143,7 +181,8 @@ case .pick:
         sort: options.sort,
         includePortless: options.includePortless,
         user: options.user,
-        initialQuery: options.query
+        initialQuery: options.query,
+        limit: options.top
     )
     exit(Terminal.withUI(mouse: true) { menu.run() })
 }

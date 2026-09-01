@@ -66,11 +66,19 @@ enum DarwinScanner {
         if name.isEmpty { name = string(from: entry.kp_proc.p_comm) }
         if name.isEmpty { name = (path as NSString).lastPathComponent }
 
+        // One call, two answers: the same `proc_taskinfo` that carries resident
+        // size carries the cumulative CPU counters, so CPU costs no syscall at
+        // all. Both are refused together for a process we do not own, which is
+        // why the MEM and CPU columns go blank on the same rows.
         var memory: UInt64?
+        var cpuSeconds: TimeInterval?
         var task = proc_taskinfo()
         if proc_pidinfo(pid, PROC_PIDTASKINFO, 0, &task,
                         Int32(MemoryLayout<proc_taskinfo>.size)) == Int32(MemoryLayout<proc_taskinfo>.size) {
             memory = task.pti_resident_size
+            // The counters are nanoseconds on Darwin, already summed across the
+            // process's threads.
+            cpuSeconds = TimeInterval(task.pti_total_user + task.pti_total_system) / 1_000_000_000
         }
 
         let started = entry.kp_proc.p_starttime
@@ -87,7 +95,8 @@ enum DarwinScanner {
             startTime: started.tv_sec > 0
                 ? Date(timeIntervalSince1970: TimeInterval(started.tv_sec))
                 : nil,
-            memoryBytes: memory
+            memoryBytes: memory,
+            cpuSeconds: cpuSeconds
         )
     }
 

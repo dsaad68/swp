@@ -163,7 +163,8 @@ extension MenuFrameTests {
     /// must still match the columns the header advertises.
     func testRenderedRowsMatchTheHeaderWidth() {
         let menu = menu(width: 100)
-        let header = TableLayout.plainHeader(widths: menu.columnWidths)
+        let header = TableLayout.plainHeader(widths: menu.columnWidths,
+                                             columns: menu.visibleColumns)
         for row in menu.visibleRows {
             XCTAssertEqual(Ansi.displayWidth(row.label), Ansi.displayWidth(header))
         }

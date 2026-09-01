@@ -12,21 +12,28 @@ enum Report {
 
     /// Render the listing as lines, ready to print. Columns come from
     /// `TableLayout`, so a printed row and a picker row are the same row.
+    /// - Parameter showCPU: include the CPU column. Off unless the caller
+    ///   measured a rate — see `CPUSampler`; a column of dashes tells the
+    ///   reader nothing and costs the command line six characters.
     static func lines(for processes: [ProcessRecord], theme: Theme, width: Int,
-                      showHeader: Bool = true, now: Date = Date()) -> [String] {
+                      showCPU: Bool = false, showHeader: Bool = true,
+                      now: Date = Date()) -> [String] {
         guard !processes.isEmpty else { return [] }
+        let columns = TableLayout.columns(showCPU: showCPU)
         // Built once and used for both the sizing pass and the rows: a row's
         // cells include a command line that can run to thousands of characters.
-        let cells = processes.map { TableLayout.cells(for: $0, now: now) }
-        let widths = TableLayout.widths(forCells: cells, totalWidth: width)
+        let cells = processes.map { TableLayout.cells(for: $0, columns: columns, now: now) }
+        let widths = TableLayout.widths(forCells: cells, columns: columns, totalWidth: width)
 
         var out: [String] = []
         if showHeader {
-            out.append(Ansi.color(trimmed(TableLayout.plainHeader(widths: widths)), theme.heading))
+            let header = TableLayout.plainHeader(widths: widths, columns: columns)
+            out.append(Ansi.color(trimmed(header), theme.heading))
         }
         for (record, row) in zip(processes, cells) {
-            let plain = TableLayout.plainRow(cells: row, widths: widths, padLast: false)
-            out.append(TableLayout.styledRow(trimmed(plain), widths: widths,
+            let plain = TableLayout.plainRow(cells: row, widths: widths, columns: columns,
+                                             padLast: false)
+            out.append(TableLayout.styledRow(trimmed(plain), widths: widths, columns: columns,
                                              record: record, theme: theme))
         }
         return out

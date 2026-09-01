@@ -6,6 +6,44 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+- **Sort by CPU and by memory, and `--top N`.** `swp --cpu --top 5` prints the
+  five busiest processes; `swp --ram -t 10` the ten largest. Both shorthands
+  imply `-a`, because "what is eating my CPU" is a question about the machine
+  rather than about its listeners; `--sort cpu` stays a pure modifier for anyone
+  who did mean it about listeners only. `--top` implies printing, since a
+  quantity of answer only means something in output.
+
+  CPU is a share of one core over a sampled interval, the way `top` reports it,
+  so it exceeds 100% on a process using more than one core. It cannot be read
+  from a single sample — macOS's `kinfo_proc.p_pctcpu` is hard zero on anything
+  modern, Linux publishes only a cumulative counter — so the command line takes
+  a second sample, about a quarter of a second, and only when asked. The picker
+  re-scans anyway, so there the column is free and always shown; its first
+  refresh is brought forward to 0.25 s so the numbers arrive promptly rather
+  than after a full interval.
+
+  On macOS the CPU counter rides along in the `proc_taskinfo` call already made
+  for resident size, so it costs no extra syscall — and is refused on the same
+  processes, which is why MEM and CPU go blank on the same rows.
+
+  The sampler checks each pid's start time before differencing. pids are reused,
+  and subtracting a dead process's counter from the live one wearing its number
+  reports a wild spike or a negative.
+
+- **`--net` and `--gpu` explain themselves.** Both were asked for and neither is
+  obtainable: macOS publishes per-process network only through the private
+  `NetworkStatistics.framework`, Linux has no per-process byte counter at all,
+  and per-process GPU is private `IOAccelerator` accounting on macOS and
+  vendor-only (NVML) on Linux. The flags are recognised and answer with the
+  reason rather than "unknown option".
+
+### Changed
+- `TableLayout` is built around a `Column` enum rather than five arrays indexed
+  in parallel. The set of columns is no longer fixed — CPU appears only when a
+  rate was measured — and inserting a conditional column into parallel arrays is
+  how off-by-one bugs are made.
+
 ### Changed
 - **A query now answers and exits instead of opening the picker.** `swp 3000`
   and `swp -p 3000` print the matching rows to stdout and stop; only a bare

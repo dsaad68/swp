@@ -24,6 +24,20 @@ public struct ProcessRecord: Equatable, Sendable {
     public var startTime: Date?
     /// Resident set size in bytes, when the platform reports it.
     public var memoryBytes: UInt64?
+    /// Total CPU time consumed since the process started (user + system), when
+    /// the platform reports it.
+    ///
+    /// Cumulative, not a rate: this is the raw counter both platforms publish,
+    /// and turning it into a percentage takes two readings. `CPUSampler` does
+    /// that; nothing here pretends to.
+    public var cpuSeconds: TimeInterval?
+    /// Share of one core, as a percentage, over the interval between the last
+    /// two scans — `nil` until there have been two.
+    ///
+    /// Filled in by `CPUSampler`, never by the scanner, because a rate is not a
+    /// property of a process at an instant. Can exceed 100 on a process using
+    /// more than one core, the way `top` and `ps` report it.
+    public var cpuPercent: Double?
     /// Bound local endpoints, already merged. Empty for the great majority of
     /// processes, which is exactly what the default (ports-only) view filters on.
     public var listeners: [Listener]
@@ -31,6 +45,7 @@ public struct ProcessRecord: Equatable, Sendable {
     public init(pid: Int32, ppid: Int32 = 0, name: String, path: String = "",
                 arguments: [String] = [], uid: uid_t = 0, user: String = "",
                 startTime: Date? = nil, memoryBytes: UInt64? = nil,
+                cpuSeconds: TimeInterval? = nil, cpuPercent: Double? = nil,
                 listeners: [Listener] = []) {
         self.pid = pid
         self.ppid = ppid
@@ -41,6 +56,8 @@ public struct ProcessRecord: Equatable, Sendable {
         self.user = user
         self.startTime = startTime
         self.memoryBytes = memoryBytes
+        self.cpuSeconds = cpuSeconds
+        self.cpuPercent = cpuPercent
         self.listeners = listeners
     }
 }
@@ -94,6 +111,7 @@ public enum ProcessSort: String, CaseIterable, Sendable {
     case port
     case pid
     case name
+    case cpu
     case memory
     case started
 
@@ -110,6 +128,7 @@ public enum ProcessSort: String, CaseIterable, Sendable {
         case .port:    return "port"
         case .pid:     return "pid"
         case .name:    return "name"
+        case .cpu:     return "cpu"
         case .memory:  return "memory"
         case .started: return "started"
         }
@@ -133,6 +152,14 @@ public extension Array where Element == ProcessRecord {
             return sorted {
                 let l = $0.name.lowercased(), r = $1.name.lowercased()
                 return l == r ? $0.pid < $1.pid : l < r
+            }
+        case .cpu:
+            // Busiest first, and a process whose CPU we were refused sorts to
+            // the bottom rather than to the top — an unknown is not a zero, but
+            // it is certainly not the answer to "what is eating my CPU".
+            return sorted {
+                let l = $0.cpuPercent ?? -1, r = $1.cpuPercent ?? -1
+                return l == r ? $0.pid < $1.pid : l > r
             }
         case .memory:
             return sorted {

@@ -32,6 +32,8 @@ struct Options: Equatable {
     /// default is to ask, because the default is irreversible.
     var assumeYes = false
     var sort: ProcessSort = .port
+    /// Keep only the first `top` rows after sorting. `nil` means all of them.
+    var top: Int?
     var json = false
     var width: Int?
     var themeName: String?
@@ -128,30 +130,44 @@ struct Options: Equatable {
             case "-y", "--yes":
                 options.assumeYes = true
 
-            case "--sort":
-                guard let raw = value(for: arg), let order = ProcessSort(rawValue: raw.lowercased()) else {
-                    let names = ProcessSort.allCases.map(\.rawValue).joined(separator: ", ")
-                    return .failure(message: "swp: --sort takes one of: \(names)", code: 1)
-                }
-                options.sort = order
-            case "--json":
-                options.json = true
-                // JSON is only ever a listing: a picker cannot emit it, and a
-                // kill's output is a report on something that already happened.
-                if modeNamedBy == nil { options.mode = .list }
+            // Shorthands for the two sorts people reach for by name rather than
+            // by concept: "what is eating my CPU", "what is eating my RAM".
+            //
+            // Both imply --all, because both are questions about the machine
+            // rather than about its listeners, and "the five busiest processes"
+            // restricted to the ones holding a port is a strange answer to a
+            // question nobody asked that way. `--sort cpu` stays a pure sort
+            // modifier for anyone who did mean it about listeners only.
+            case "--cpu":
+                options.sort = .cpu
+                options.includePortless = true
+            case "--ram", "--mem", "--memory":
+                options.sort = .memory
+                options.includePortless = true
 
-            case "--width":
-                guard let raw = value(for: arg), let width = Int(raw), width > 0 else {
-                    return .failure(message: "swp: --width requires a positive number", code: 1)
+            case "-t", "--top":
+                guard let raw = value(for: arg), let count = Int(raw), count > 0 else {
+                    return .failure(message: "swp: \(arg) requires a positive number", code: 1)
                 }
-                options.width = width
-            case "--theme":
-                guard let name = value(for: arg) else {
-                    return .failure(message: "swp: --theme requires a name (\(Theme.names.joined(separator: ", ")))", code: 1)
+                options.top = count
+
+            // Recognised so the answer is the reason rather than "unknown
+            // option". Both are real asks and neither is refusable by a bit of
+            // work: they need interfaces that do not exist for us to call.
+            case "--net", "--network":
+                return .failure(message: Self.networkUnavailable, code: 1)
+            case "--gpu":
+                return .failure(message: Self.gpuUnavailable, code: 1)
+
+            case "--sort", "--json", "--width", "--theme", "--no-color":
+                // Presentation, handled apart purely to keep this function
+                // inside the body-length ceiling — the switch grows a case per
+                // flag and had outgrown it.
+                switch options.applyPresentation(arg, value: { value(for: $0) },
+                                                 modeAlreadyNamed: modeNamedBy != nil) {
+                case .none: break
+                case .some(let message): return .failure(message: message, code: 1)
                 }
-                options.themeName = name
-            case "--no-color":
-                options.noColor = true
 
             default:
                 // A bare word is part of the query. Anything else beginning with
@@ -189,8 +205,74 @@ struct Options: Equatable {
         if modeNamedBy == nil, !options.query.isEmpty {
             options.mode = .list
         }
+        // `--top N` names a quantity of *answer*, which only means something in
+        // output: `swp --cpu --top 5` is a question about the five busiest, not
+        // a request to browse. A sort order alone is not — `swp --cpu` opening
+        // the picker sorted by CPU is a browse, and a useful one.
+        if modeNamedBy == nil, options.top != nil {
+            options.mode = .list
+        }
         return .success(options)
     }
+
+    /// Handle one presentation flag, returning a message if it was malformed.
+    ///
+    /// - Parameter value: pulls the flag's argument, refusing one that looks
+    ///   like another flag — the caller owns the argument cursor.
+    /// - Parameter modeAlreadyNamed: whether `-l`/`-k`/`-i` has been seen, so
+    ///   `--json` knows whether it may set one.
+    private mutating func applyPresentation(_ flag: String, value: (String) -> String?,
+                                            modeAlreadyNamed: Bool) -> String? {
+        switch flag {
+        case "--sort":
+            guard let raw = value(flag), let order = ProcessSort(rawValue: raw.lowercased()) else {
+                let names = ProcessSort.allCases.map(\.rawValue).joined(separator: ", ")
+                return "swp: --sort takes one of: \(names)"
+            }
+            sort = order
+        case "--json":
+            json = true
+            // JSON is only ever a listing: a picker cannot emit it, and a
+            // kill's output is a report on something that already happened.
+            if !modeAlreadyNamed { mode = .list }
+        case "--width":
+            guard let raw = value(flag), let width = Int(raw), width > 0 else {
+                return "swp: --width requires a positive number"
+            }
+            self.width = width
+        case "--theme":
+            guard let name = value(flag) else {
+                return "swp: --theme requires a name (\(Theme.names.joined(separator: ", ")))"
+            }
+            themeName = name
+        case "--no-color":
+            noColor = true
+        default:
+            return "swp: unknown option \(flag)"
+        }
+        return nil
+    }
+
+    /// Why `--net` cannot be answered. Recognised rather than left to fall
+    /// through as an unknown option: it is a reasonable thing to ask for, and
+    /// the useful reply is the reason, not a shrug.
+    static let networkUnavailable = """
+    swp: per-process network usage is not available to a program like this.
+         macOS publishes it only through NetworkStatistics.framework, which is
+         private API — it is what nettop and Activity Monitor use. Linux has no
+         per-process byte counter at all: /proc/<pid>/net/dev is per network
+         namespace, so tools like nethogs capture packets and attribute them by
+         socket inode, which needs root.
+         `swp -a` still shows which ports a process holds.
+    """
+
+    /// The same, for `--gpu`.
+    static let gpuUnavailable = """
+    swp: per-process GPU usage is not available to a program like this.
+         Activity Monitor reads it through private IOAccelerator accounting; the
+         public IOKit registry reports per-*device* utilisation, not per process.
+         On Linux it exists only per vendor (NVML, and NVIDIA only).
+    """
 
     /// `--help`. Kept beside the parser so a flag and its documentation are
     /// edited in one place.
@@ -204,6 +286,8 @@ struct Options: Equatable {
            swp -a                  pick from every process, port or not
            swp -i 3000             open the picker on port 3000 instead
            swp -k 3000             kill what's on port 3000
+           swp --cpu --top 5       the five busiest processes, printed
+           swp --ram -t 10         the ten largest by memory
 
     A query answers and exits; a bare `swp` opens the picker. So `swp 3000`
     prints, and pipes and scripts need no flag — while `swp` alone still
@@ -220,6 +304,9 @@ struct Options: Equatable {
           --pid N        Match process id N (repeatable)
       -u, --user NAME    Only this user's processes (name or uid)
           --me           Only your own processes
+          --cpu          Busiest first, across every process (= --sort cpu -a)
+          --ram          Largest first, across every process (= --sort memory -a)
+      -t, --top N        Keep only the first N rows, and print them
       -a, --all          Include processes that hold no port. Implied whenever
                          a name or --pid is given: only a browse is narrowed to
                          listeners
@@ -243,7 +330,12 @@ struct Options: Equatable {
       Enter or x  send \(Signal.term.displayName)   X  send \(Signal.kill.displayName)  s  change sort order
       y           copy the pid  r  refresh       ?  keys        q  quit
 
-    NOTE: without root, the ports of other users' processes are invisible to
-    the kernel calls this uses — run `sudo swp` to see them all.
+    CPU is a share of one core over a sampled interval, the way top reports
+    it, so it can exceed 100% on a process using more than one. Asking for it
+    on the command line costs a second sample (about a quarter of a second);
+    the picker re-scans anyway, so there it is free and always shown.
+
+    NOTE: without root, the ports, memory and CPU of other users' processes are
+    invisible to the kernel calls this uses — run `sudo swp` to see them all.
     """
 }

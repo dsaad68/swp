@@ -52,3 +52,22 @@ final class FormatTests: XCTestCase {
         XCTAssertEqual(Format.pad("abcdef", to: 3), "abcdef")
     }
 }
+
+extension FormatTests {
+
+    func testPercentKeepsOneDecimalOnlyWhereItMatters() {
+        XCTAssertEqual(Format.percent(0.42), "0.4%")
+        XCTAssertEqual(Format.percent(4.25), "4.2%")
+        XCTAssertEqual(Format.percent(42.4), "42%")
+        // Over one core is a real reading, not something to clamp.
+        XCTAssertEqual(Format.percent(137.2), "137%")
+    }
+
+    /// An unknown is not a zero: the kernel refusing to say is a different
+    /// fact from the process being idle, and the column must not merge them.
+    func testPercentDistinguishesUnknownFromIdle() {
+        XCTAssertEqual(Format.percent(nil), "-")
+        XCTAssertEqual(Format.percent(0), "0%")
+        XCTAssertEqual(Format.percent(0.001), "0%")
+    }
+}

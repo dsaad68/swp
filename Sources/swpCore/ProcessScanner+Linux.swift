@@ -48,6 +48,10 @@ enum LinuxScanner {
         // rest[0] is state; ppid is the next one, and the stat(5) field numbers
         // are 3-based from here, so field N sits at rest[N - 3].
         let ppid = rest.count > 1 ? Int32(rest[1]) ?? 0 : 0
+        // stat(5) numbers its fields from 1 and `rest` begins at field 3, so
+        // field N is rest[N - 3] throughout.
+        let utime = rest.count > 11 ? Double(rest[11]) ?? 0 : 0          // field 14
+        let stime = rest.count > 12 ? Double(rest[12]) ?? 0 : 0          // field 15
         let startTicks = rest.count > 19 ? Double(rest[19]) ?? 0 : 0     // field 22
         let rssPages = rest.count > 21 ? UInt64(rest[21]) ?? 0 : 0       // field 24
 
@@ -72,7 +76,11 @@ enum LinuxScanner {
             uid: uid,
             user: UserNames.name(for: uid),
             startTime: start,
-            memoryBytes: rssPages * pageSize
+            memoryBytes: rssPages * pageSize,
+            // Clock ticks, not nanoseconds, and the tick rate is a runtime
+            // value — 100 Hz nearly everywhere, but sysconf is the only thing
+            // entitled to say so.
+            cpuSeconds: ticks > 0 ? (utime + stime) / ticks : nil
         )
     }
 

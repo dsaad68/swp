@@ -32,8 +32,9 @@ extension ProcessMenu {
         // Truncated like a row: the shrink pass keeps the columns inside the
         // frame in every realistic case, and this is what holds when the
         // terminal is narrower than the floors themselves.
-        lines.append(boxed(Ansi.color(Format.truncate(TableLayout.plainHeader(widths: columnWidths),
-                                                      to: inner), theme.heading), inner: inner))
+        let header = TableLayout.plainHeader(widths: columnWidths, columns: visibleColumns)
+        lines.append(boxed(Ansi.color(Format.truncate(header, to: inner), theme.heading),
+                           inner: inner))
 
         let rows = visibleRows
         if rows.isEmpty {
@@ -115,8 +116,9 @@ extension ProcessMenu {
         // selection background covers the row edge to edge rather than stopping
         // where the command happens to end.
         let plain = Format.pad(Format.truncate(row.label, to: inner), to: inner)
-        let styled = TableLayout.styledRow(plain, widths: columnWidths, record: row.record,
-                                           theme: theme, highlight: Set(row.indices),
+        let styled = TableLayout.styledRow(plain, widths: columnWidths, columns: visibleColumns,
+                                           record: row.record, theme: theme,
+                                           highlight: Set(row.indices),
                                            background: selected ? theme.selectionBg : nil)
         return styled
     }
