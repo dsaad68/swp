@@ -6,6 +6,32 @@ import Darwin
 import Glibc
 #endif
 
+/// Socket calls that are spelled differently on the two platforms.
+///
+/// `SOCK_STREAM` is an `Int32` in Darwin's headers and a `__socket_type` in
+/// Glibc's, and bare `bind` resolves to `XCTestCase.bind` inside a test case, so
+/// it has to be qualified — with a module name that differs by platform. Both
+/// only show up when the Linux job runs, which is exactly the kind of thing a
+/// macOS-only developer never sees.
+private enum Sockets {
+
+    static func stream() -> Int32 {
+        #if canImport(Darwin)
+        return socket(AF_INET, SOCK_STREAM, 0)
+        #else
+        return socket(AF_INET, Int32(SOCK_STREAM.rawValue), 0)
+        #endif
+    }
+
+    static func bind(_ fd: Int32, _ addr: UnsafePointer<sockaddr>, _ length: socklen_t) -> Int32 {
+        #if canImport(Darwin)
+        return Darwin.bind(fd, addr, length)
+        #else
+        return Glibc.bind(fd, addr, length)
+        #endif
+    }
+}
+
 /// The scanner is the one part that cannot be tested against fixtures — it is
 /// the seam onto the running machine. So these tests assert about the one
 /// process whose truth is known here: this one.
@@ -68,7 +94,7 @@ final class ScannerTests: XCTestCase {
     /// Bind a TCP socket on a port the kernel picks, so the test cannot collide
     /// with whatever the machine is already running.
     private func openListener() throws -> (fd: Int32, port: UInt16) {
-        let fd = socket(AF_INET, SOCK_STREAM, 0)
+        let fd = Sockets.stream()
         try XCTUnwrap(fd >= 0 ? true : nil, "socket() failed")
         var addr = sockaddr_in()
         addr.sin_family = sa_family_t(AF_INET)
@@ -76,7 +102,7 @@ final class ScannerTests: XCTestCase {
         addr.sin_addr.s_addr = INADDR_ANY
         let bound = withUnsafePointer(to: &addr) { pointer in
             pointer.withMemoryRebound(to: sockaddr.self, capacity: 1) {
-                Darwin.bind(fd, $0, socklen_t(MemoryLayout<sockaddr_in>.size))
+                Sockets.bind(fd, $0, socklen_t(MemoryLayout<sockaddr_in>.size))
             }
         }
         try XCTUnwrap(bound == 0 ? true : nil, "bind() failed")
