@@ -40,6 +40,17 @@ look at it.
 
 ## Install
 
+### Homebrew (macOS and Linux)
+
+```sh
+brew install dsaad68/tap/swp
+```
+
+Upgrade later with `brew upgrade swp`. The macOS bottle is a universal binary
+(Apple Silicon and Intel); Linux is x86_64.
+
+### From source
+
 Requires a Swift 5.9+ toolchain.
 
 ```sh
@@ -84,7 +95,8 @@ kills on the twin of the up-arrow will one day kill the wrong thing.
 
 **[The guide](docs/guide.md)** covers everything: the query language, every
 flag, reading each column, killing safely, scripting with `--json`, and what
-`swp` cannot see. [CHANGELOG.md](CHANGELOG.md) tracks releases.
+`swp` cannot see. **[Releasing](docs/releasing.md)** documents the tag-driven
+pipeline. [CHANGELOG.md](CHANGELOG.md) tracks releases.
 
 ## Two honest limits
 
@@ -102,8 +114,14 @@ options. [Details in the guide.](docs/guide.md#what-swp-cant-see)
 
 ```sh
 just build    just test    just integration
-just check    # format + lint + test, the way CI does
+just check       # format + lint + test, the way CI does
+just linux-test  # the same, for Linux, in a container (needs Docker)
+just preflight   # both of the above — run this before tagging
 ```
+
+swp's Linux scanner is behind `#if !canImport(Darwin)`, so a macOS build never
+compiles it. Run `just linux-test` before releasing;
+[docs/releasing.md](docs/releasing.md) explains why that is not hypothetical.
 
 `swpCore` is everything reasonable without a terminal — the scanners, the query
 language, formatting, the killer — and has no dependency on the executable, so

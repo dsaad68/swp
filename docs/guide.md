@@ -16,6 +16,8 @@ it.
 - [10. Troubleshooting](#10-troubleshooting)
 - [Flag reference](#flag-reference)
 
+Releasing swp is a separate document: [releasing.md](releasing.md).
+
 ---
 
 ## 1. The two modes

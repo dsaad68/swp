@@ -7,6 +7,23 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 ### Added
+- **A tag-driven release pipeline** (`.github/workflows/release.yml`) that
+  builds a universal macOS binary and a Linux x86_64 one, publishes a GitHub
+  Release with notes taken from this file, and pushes a rendered formula to
+  [dsaad68/homebrew-tap](https://github.com/dsaad68/homebrew-tap) — so
+  `brew install dsaad68/tap/swp` works. Documented in `docs/releasing.md`;
+  `just tag` is the whole ceremony, and `just preflight` is what to run first.
+- **`just linux-build` / `just linux-test`** run the Linux build and test suite
+  in a `swift:6.2` container. swp's Linux scanner is behind
+  `#if !canImport(Darwin)`, so a macOS build never compiles it.
+
+### Fixed
+- The Linux CI job had failed on **every commit since the first** and nobody had
+  looked. The scanner itself was fine; the socket test did not build under
+  Glibc, where `SOCK_STREAM` is a `__socket_type` rather than an `Int32` and
+  `Darwin.bind` does not exist. Both are now behind a small platform shim.
+
+### Added
 - **Sort by CPU and by memory, and `--top N`.** `swp --cpu --top 5` prints the
   five busiest processes; `swp --ram -t 10` the ten largest. Both shorthands
   imply `-a`, because "what is eating my CPU" is a question about the machine

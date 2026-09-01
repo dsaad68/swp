@@ -1,0 +1,206 @@
+name: Release
+
+# Tag-driven: `git tag v0.2.0 && git push origin v0.2.0` is the whole release
+# ceremony. Everything below derives from that tag.
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  # 1) The tag is the source of truth — fail before building anything if
+  #    Version.swift disagrees with it. A release whose binary reports a
+  #    different version than its own formula is worse than no release, and the
+  #    Homebrew test block asserts on exactly that string.
+  verify-version:
+    name: Verify tag matches appVersion
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Compare tag to Sources/swp/Version.swift
+        run: |
+          tag="${GITHUB_REF_NAME#v}"
+          src=$(grep -oE 'let appVersion = "[^"]+"' Sources/swp/Version.swift \
+                | head -n1 | sed -E 's/.*"([^"]+)".*/\1/')
+          echo "tag=$tag  source=$src"
+          if [ "$tag" != "$src" ]; then
+            echo "::error::Tag v$tag does not match appVersion \"$src\" in Sources/swp/Version.swift"
+            exit 1
+          fi
+
+  # 2) The same checks CI runs, again, on the exact commit being released.
+  #    CI having been green on the branch is not the same as being green on the
+  #    tag — a tag can point anywhere.
+  verify-quality:
+    name: Test · ${{ matrix.name }}
+    needs: verify-version
+    runs-on: ${{ matrix.runs-on }}
+    container: ${{ matrix.container }}
+    strategy:
+      fail-fast: true
+      matrix:
+        include:
+          - name: macOS
+            runs-on: macos-14
+            container: ''
+          - name: Linux
+            runs-on: ubuntu-latest
+            container: swift:6.2
+    steps:
+      - uses: actions/checkout@v4
+      - name: Select latest-stable Xcode (macOS)
+        if: runner.os == 'macOS'
+        uses: maxim-lobanov/setup-xcode@v1
+        with:
+          xcode-version: latest-stable
+      - name: Build
+        run: swift build
+      - name: Run tests
+        run: swift test
+      - name: Integration checks (CLI)
+        run: ./Tests/Integration/cli.sh .build/debug/swp
+
+  # 3) Build the artifacts users will actually download.
+  build:
+    name: Build · ${{ matrix.name }}
+    needs: verify-quality
+    runs-on: ${{ matrix.runs-on }}
+    container: ${{ matrix.container }}
+    strategy:
+      fail-fast: true
+      matrix:
+        include:
+          - name: macOS (universal)
+            runs-on: macos-14
+            container: ''
+            suffix: macos
+            build: swift build -c release --arch arm64 --arch x86_64
+          - name: Linux x86_64
+            runs-on: ubuntu-latest
+            container: swift:6.2
+            suffix: linux-x86_64
+            build: swift build -c release
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Select latest-stable Xcode (macOS)
+        if: runner.os == 'macOS'
+        uses: maxim-lobanov/setup-xcode@v1
+        with:
+          xcode-version: latest-stable
+
+      - name: Build
+        run: ${{ matrix.build }}
+
+      - name: Package
+        run: |
+          # --show-bin-path with the *same* flags: a universal build lands in
+          # .build/apple/Products/Release, not the usual .build/release.
+          bindir="$(${{ matrix.build }} --show-bin-path)"
+          strip "$bindir/swp" 2>/dev/null || true
+          "$bindir/swp" --version
+          tar -czf "swp-${GITHUB_REF_NAME}-${{ matrix.suffix }}.tar.gz" -C "$bindir" swp
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.suffix }}
+          path: swp-*.tar.gz
+
+  # 4) Publish the GitHub Release, then point the tap at it.
+  release:
+    name: Publish & update tap
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write   # create the GitHub Release
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+
+      - name: Compute checksums
+        id: sums
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          mac="dist/swp-${GITHUB_REF_NAME}-macos.tar.gz"
+          linux="dist/swp-${GITHUB_REF_NAME}-linux-x86_64.tar.gz"
+          # Fail loudly rather than publishing a formula with an empty sha256:
+          # brew would report a checksum mismatch to the user instead.
+          for f in "$mac" "$linux"; do
+            [ -s "$f" ] || { echo "::error::missing or empty artifact $f"; exit 1; }
+          done
+          mac_sha=$(sha256sum "$mac" | cut -d' ' -f1)
+          linux_sha=$(sha256sum "$linux" | cut -d' ' -f1)
+          for f in dist/*.tar.gz; do sha256sum "$f" > "$f.sha256"; done
+          {
+            echo "version=$version"
+            echo "mac_sha=$mac_sha"
+            echo "linux_sha=$linux_sha"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Extract release notes from CHANGELOG
+        id: notes
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          # The section for this version, up to the next "## " heading. Falls
+          # back to a pointer if the release was tagged without a changelog
+          # entry — a missing note should not fail a release.
+          notes=$(awk -v v="## [$version]" '
+            index($0, v) == 1 { grab = 1; next }
+            grab && /^## / { exit }
+            grab { print }
+          ' CHANGELOG.md)
+          if [ -z "$(printf '%s' "$notes" | tr -d '[:space:]')" ]; then
+            notes="See CHANGELOG.md for details."
+          fi
+          {
+            echo 'body<<CHANGELOG_EOF'
+            printf '%s\n' "$notes"
+            echo 'CHANGELOG_EOF'
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Create GitHub Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" \
+            --repo "$GITHUB_REPOSITORY" \
+            --title "$GITHUB_REF_NAME" \
+            --notes "${{ steps.notes.outputs.body }}" \
+            dist/*.tar.gz dist/*.sha256
+
+      - name: Update Homebrew tap
+        env:
+          TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+          VERSION: ${{ steps.sums.outputs.version }}
+          MAC_SHA: ${{ steps.sums.outputs.mac_sha }}
+          LINUX_SHA: ${{ steps.sums.outputs.linux_sha }}
+        run: |
+          if [ -z "$TAP_TOKEN" ]; then
+            echo "::warning::HOMEBREW_TAP_TOKEN is not set — the GitHub Release is published, but the tap was not updated."
+            exit 0
+          fi
+          git clone --depth 1 \
+            "https://x-access-token:${TAP_TOKEN}@github.com/dsaad68/homebrew-tap.git" tap
+          mkdir -p tap/Formula
+          sed -e "s/__VERSION__/${VERSION}/g" \
+              -e "s/__MAC_SHA__/${MAC_SHA}/g" \
+              -e "s/__LINUX_SHA__/${LINUX_SHA}/g" \
+              .github/homebrew/swp.rb.template > tap/Formula/swp.rb
+          # A placeholder left in the formula means the sed above missed one,
+          # and brew would fail on the user's machine rather than here.
+          if grep -q '__[A-Z_]*__' tap/Formula/swp.rb; then
+            echo "::error::unsubstituted placeholder left in the formula"
+            grep -n '__[A-Z_]*__' tap/Formula/swp.rb
+            exit 1
+          fi
+          cd tap
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add Formula/swp.rb
+          git commit -m "swp ${VERSION}" || { echo "No formula change."; exit 0; }
+          git push
