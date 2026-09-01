@@ -64,6 +64,20 @@ usual `.build/release` — which is why the packaging step asks
 extracted from the matching `CHANGELOG.md` section, then renders
 `.github/homebrew/swp.rb.template` into `Formula/swp.rb` in the tap and pushes.
 
+> **Release notes go to a file, never to a command line.** The first version of
+> this workflow passed them as `--notes "${{ steps.notes.outputs.body }}"`.
+> Actions substitutes an expression *textually into the script* before bash sees
+> it, so 129 lines of changelog Markdown became shell source — and every
+> `` `inline code span` `` in it is a backtick pair, which bash ran as a command
+> substitution. The log filled with `swp: command not found`, and what survived
+> blew past `ARG_MAX`. It failed loudly, which was luck: the content was ours.
+> A changelog entry containing `$(...)` would have executed inside the one job
+> that holds the tap token.
+>
+> The rule this leaves: **`${{ }}` belongs in `env:`, not in a `run:` body.**
+> The only exception in this workflow is `matrix.build`, which *is* a command
+> and is a literal written a few lines above its use.
+
 Two guards in that last step, both for failures that would otherwise land on a
 user rather than in the log:
 
@@ -127,6 +141,13 @@ Do this only before anyone has installed it. A published version that people
 have downloaded should be superseded by a new patch version, not rewritten —
 Homebrew caches by URL and checksum, and moving a tag under a released formula
 gives users a checksum mismatch they cannot resolve.
+
+**The publish step failed.** Check whether it got as far as creating the
+release: `gh release list --repo dsaad68/swp`. The tap is only touched after the
+release succeeds, so a failure at or before that point has published nothing,
+and re-tagging is safe. That is what happened on the first attempt at v0.1.0 —
+the tag was deleted and re-pushed once the workflow was fixed, with no release
+and no tap commit to clean up.
 
 **The build failed after the release was created.** The GitHub Release exists
 with partial assets. Delete it (`gh release delete v0.2.0 --repo dsaad68/swp`),

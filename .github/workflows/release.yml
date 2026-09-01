@@ -93,13 +93,20 @@ jobs:
         run: ${{ matrix.build }}
 
       - name: Package
+        env:
+          SUFFIX: ${{ matrix.suffix }}
         run: |
+          # `matrix.build` is interpolated because it *is* a command, and it is
+          # a literal written in this file a few lines up — not content from
+          # anywhere else. Everything that is merely a value goes through env,
+          # where no shell parses it.
+          #
           # --show-bin-path with the *same* flags: a universal build lands in
           # .build/apple/Products/Release, not the usual .build/release.
           bindir="$(${{ matrix.build }} --show-bin-path)"
           strip "$bindir/swp" 2>/dev/null || true
           "$bindir/swp" --version
-          tar -czf "swp-${GITHUB_REF_NAME}-${{ matrix.suffix }}.tar.gz" -C "$bindir" swp
+          tar -czf "swp-${GITHUB_REF_NAME}-${SUFFIX}.tar.gz" -C "$bindir" swp
 
       - uses: actions/upload-artifact@v4
         with:
@@ -142,26 +149,39 @@ jobs:
             echo "linux_sha=$linux_sha"
           } >> "$GITHUB_OUTPUT"
 
+      # The notes go to a FILE, and the file is what `gh` is handed. They must
+      # never reach a shell command line, in an interpolation or otherwise.
+      #
+      # The first version of this step built the notes into a step output and
+      # passed them as `--notes "${{ steps.notes.outputs.body }}"`. Actions
+      # substitutes an expression textually into the script *before* bash sees
+      # it, so 129 lines of changelog Markdown became shell source — and every
+      # `inline code span` in it is a backtick pair, which bash ran as a
+      # command substitution. The log filled with "swp: command not found",
+      # "--top: command not found", and the remains blew past ARG_MAX
+      # ("Argument list too long", exit 126).
+      #
+      # It was benign only because the content was ours. A changelog entry
+      # containing $(...) would have executed in this job, which is the one job
+      # holding the tap token. --notes-file has no shell in the path at all.
       - name: Extract release notes from CHANGELOG
-        id: notes
+        env:
+          VERSION_HEADING: "## [${{ github.ref_name }}]"
         run: |
-          version="${GITHUB_REF_NAME#v}"
-          # The section for this version, up to the next "## " heading. Falls
-          # back to a pointer if the release was tagged without a changelog
-          # entry — a missing note should not fail a release.
-          notes=$(awk -v v="## [$version]" '
-            index($0, v) == 1 { grab = 1; next }
+          # The heading carries the tag's own "v", which the changelog does not.
+          heading="${VERSION_HEADING/\[v/[}"
+          awk -v want="$heading" '
+            index($0, want) == 1 { grab = 1; next }
             grab && /^## / { exit }
             grab { print }
-          ' CHANGELOG.md)
-          if [ -z "$(printf '%s' "$notes" | tr -d '[:space:]')" ]; then
-            notes="See CHANGELOG.md for details."
+          ' CHANGELOG.md > release-notes.md
+          # A missing changelog section should not fail a release, but it should
+          # be visible in the log rather than producing an empty release body.
+          if [ ! -s release-notes.md ] || [ -z "$(tr -d '[:space:]' < release-notes.md)" ]; then
+            echo "::warning::no '$heading' section in CHANGELOG.md — falling back"
+            echo "See CHANGELOG.md for details." > release-notes.md
           fi
-          {
-            echo 'body<<CHANGELOG_EOF'
-            printf '%s\n' "$notes"
-            echo 'CHANGELOG_EOF'
-          } >> "$GITHUB_OUTPUT"
+          echo "notes: $(wc -l < release-notes.md) lines"
 
       - name: Create GitHub Release
         env:
@@ -170,7 +190,7 @@ jobs:
           gh release create "$GITHUB_REF_NAME" \
             --repo "$GITHUB_REPOSITORY" \
             --title "$GITHUB_REF_NAME" \
-            --notes "${{ steps.notes.outputs.body }}" \
+            --notes-file release-notes.md \
             dist/*.tar.gz dist/*.sha256
 
       - name: Update Homebrew tap
