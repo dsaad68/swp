@@ -22,3 +22,8 @@ Release/
 
 # Local agent/board state
 .dangerboard/
+
+# Demo scaffolding: the compiled listeners and the pids of the running ones.
+# demo/demo.gif IS tracked — it is what the README shows.
+demo/.bin/
+demo/.pids

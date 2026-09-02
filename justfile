@@ -110,6 +110,21 @@ tag:
     git push origin "v$version"
     echo "Pushed. Watch it with: gh run watch --repo dsaad68/swp"
 
+# Renders demo/demo.gif from demo/swp.tape. Stands up three disposable
+# listeners first and tears them down after, because the tape ends by killing
+# one of them. Needs vhs (brew install vhs), which pulls ttyd and ffmpeg.
+
+# Record the README demo GIF
+demo:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    command -v vhs >/dev/null || { echo "error: vhs not installed (brew install vhs)" >&2; exit 1; }
+    swift build -c release
+    trap './demo/teardown.sh' EXIT
+    ./demo/setup.sh
+    PATH="$PWD/.build/release:$PATH" vhs demo/swp.tape
+    ls -lh demo/demo.gif
+
 # Clean build artifacts
 clean:
     swift package clean

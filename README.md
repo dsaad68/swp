@@ -18,25 +18,8 @@ the kernel's own process and socket tables. A full scan of a thousand processes
 takes about **12 ms**, which is what lets the picker refresh itself while you
 look at it.
 
-```
-╭──────────────────────────────────────────────────────────────────────────╮
-│                                                                          │
-│   ╭─╴ ╷ ╷ ╭─╮                                                            │
-│   ╰─╮ │ │ ├─╯                                                            │
-│   ╶─╯ ╰┴╯ ╵                                                              │
-│   26 listening  ·  all users                          by port  ·  v0.1.0 │
-│                                                                          │
-│  ╭────────────────────────────────────────────────────────────────────╮  │
-│  │ ❯ press / to filter — by name, port, pid, anything                 │  │
-│  ╰────────────────────────────────────────────────────────────────────╯  │
-│ PORT           PID  USER    CPU   MEM  UP   NAME           COMMAND       │
-│ 3000         49649  dsaad  0.1%   66M  1d   bun            --hot serve.… │
-│ 5432          1120  dsaad  2.4%  212M  4d   postgres       -D /data      │
-│ 8080         19074  dsaad    0%   12M  1d   sabacc-server  --addr 127.0… │
-│ 11434         1588  dsaad    0%   27M  4d   ollama         serve         │
-│ ↑↓ move · / filter · ⏎ SIGTERM · X SIGKILL · a all · s sort · ? keys     │
-╰──────────────────────────────────────────────────────────────────────────╯
-```
+![swp](demo/demo.gif)
+
 
 ## Install
 

@@ -6,6 +6,20 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+- **A recorded demo** (`demo/demo.gif`, shown in the README), scripted with
+  [VHS](https://github.com/charmbracelet/vhs) in `demo/swp.tape` and re-recorded
+  with `just demo`. `demo/setup.sh` stands up three disposable listeners first
+  so the recording is reproducible and — more to the point — so the kill at the
+  end reaches something the demo created.
+
+  The kill is scoped through `swp -i 5173`, an exact port query, rather than
+  through the fuzzy filter. An earlier tape filtered on "vite" and pressed `x`
+  on whatever the cursor was on, which was `DropboxFileProvider` — the fuzzy
+  filter matches across every column, and v-i-t-e appears in that name. The
+  confirmation dialog named the target correctly and the tape pressed `y`
+  anyway, because a tape cannot read.
+
 ## [0.1.0] - 2026-09-01
 
 First release. Nothing was published before this, so everything below shipped

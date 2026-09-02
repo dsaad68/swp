@@ -16,7 +16,9 @@ it.
 - [10. Troubleshooting](#10-troubleshooting)
 - [Flag reference](#flag-reference)
 
-Releasing swp is a separate document: [releasing.md](releasing.md).
+Releasing swp is a separate document: [releasing.md](releasing.md). The README's
+demo GIF is recorded with [VHS](https://github.com/charmbracelet/vhs) from
+`demo/swp.tape` — `just demo` re-records it.
 
 ---
 
