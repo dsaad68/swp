@@ -39,52 +39,77 @@ Type "export COLORTERM=truecolor" Enter
 Type "clear" Enter
 Show
 
-# ── 1. The question it exists to answer ──────────────────────────────────
-Type "swp -p 5173"
-Sleep 400ms
+# ── The framing, before anything happens ─────────────────────────────────
+# Two ways in is the thing to understand about swp, and it is the thing a
+# viewer cannot infer from watching commands run. So it is said first, as
+# shell comments — which cost a line each and run nothing.
+Type@40ms "# swp has two ways in"
 Enter
-Sleep 2.5s
+Sleep 1.2s
 
-# ── 2. A query answers and exits, so it composes ─────────────────────────
-Type "swp --cpu --top 5"
-Sleep 400ms
+# ── 1. The app: for when you want to look ────────────────────────────────
+Type@40ms "# 1. the picker — when you want to look around"
 Enter
-Sleep 3.5s
+Sleep 1.4s
 
-Type "clear"
-Enter
-Sleep 400ms
-
-# ── 3. A bare swp browses ────────────────────────────────────────────────
 Type "swp"
-Sleep 400ms
+Sleep 300ms
 Enter
 # Long enough for the second scan at 0.25s, which is when CPU figures arrive:
 # a rate needs two readings and the first frame has only one.
 Sleep 2.5s
 
 Down
-Sleep 500ms
+Sleep 450ms
 Down
-Sleep 800ms
+Sleep 700ms
 
-# ── 4. The filter is fuzzy, and across every column at once ──────────────
-# "vite" finds the server, and also identityservicesd and DropboxFileProvider,
-# with the matched letters picked out. That is the feature, and it is exactly
-# why the kill below does not happen from here.
+# The filter is fuzzy, and across every column at once. "vite" finds the
+# server, and also identityservicesd and DropboxFileProvider, with the matched
+# letters picked out. That is the feature — and it is exactly why the kill at
+# the end does not happen from here.
 Type "/"
-Sleep 600ms
+Sleep 500ms
 Type@130ms "vite"
 Sleep 2.2s
 
 Escape
 Sleep 400ms
 Type "q"
-Sleep 800ms
+Sleep 900ms
 
-# ── 5. Killing: scoped by an exact port query, and it always asks ────────
-Type "swp -i 5173"
+Type "clear"
+Enter
 Sleep 400ms
+
+# ── 2. The CLI: for when you already know ────────────────────────────────
+Type@40ms "# 2. a query — when you already know what you want"
+Enter
+Sleep 1.4s
+
+Type "swp -p 5173"
+Sleep 300ms
+Enter
+Sleep 2.4s
+
+# A query answers and exits, so it composes.
+Type "swp --cpu --top 5"
+Sleep 300ms
+Enter
+Sleep 3.4s
+
+Type "clear"
+Enter
+Sleep 400ms
+
+# ── 3. Either way, killing asks first ────────────────────────────────────
+Type@40ms "# and either way, killing asks first"
+Enter
+Sleep 1.4s
+
+# Scoped by an exact port query — see the note at the top of this file.
+Type "swp -i 5173"
+Sleep 300ms
 Enter
 Sleep 2.2s
 
@@ -95,7 +120,7 @@ Sleep 400ms
 Type "x"
 Sleep 2.2s
 Type "y"
-Sleep 2.5s
+Sleep 2.6s
 
 Type "q"
 Sleep 1.2s

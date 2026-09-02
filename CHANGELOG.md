@@ -13,6 +13,10 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   so the recording is reproducible and — more to the point — so the kill at the
   end reaches something the demo created.
 
+  It opens by stating the thing a viewer cannot infer from watching commands
+  run — that there are two ways in — then shows the picker, then a query, then
+  a kill. The README leads with the same framing rather than with a flag.
+
   The kill is scoped through `swp -i 5173`, an exact port query, rather than
   through the fuzzy filter. An earlier tape filtered on "vite" and pressed `x`
   on whatever the cursor was on, which was `DropboxFileProvider` — the fuzzy

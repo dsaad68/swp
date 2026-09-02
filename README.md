@@ -7,11 +7,27 @@
 
 **Find what's holding a port, and kill it.**
 
+There are two ways in.
+
+**1. The picker**, for when you want to look around — arrow keys, a fuzzy
+filter across every column, and a kill that asks first:
+
+```sh
+swp
+```
+
+**2. A query**, for when you already know what you want. It answers on stdout
+and exits, so it composes:
+
 ```console
 $ swp -p 3000
 PORT    PID  USER   MEM  UP  NAME  COMMAND
 3000  49649  dsaad  66M  1d  bun   --hot scripts/serve.ts
 ```
+
+That is the whole rule: **a query answers and exits, a bare `swp` opens the
+picker.** So `swp 3000` works in a pipeline with no flag for it, while `swp`
+alone browses.
 
 Written in pure Swift with no `lsof`, no `ps`, and no subprocesses — it reads
 the kernel's own process and socket tables. A full scan of a thousand processes
@@ -44,7 +60,7 @@ just install          # release build, symlinked into ~/.local/bin (no sudo)
 Make sure `~/.local/bin` is on your `PATH`. To run from a clone without
 installing: `just swp`, `just swp 3000`, `just swp -i node`.
 
-## The six things you'll actually type
+## What you'll actually type
 
 ```sh
 swp                   # browse everything holding a port
@@ -53,12 +69,8 @@ swp node              # print processes named — or running — node
 swp -k 3000           # kill what's on 3000 (asks first)
 swp --cpu --top 5     # the five busiest processes
 swp -a                # browse every process, port or not
+swp -i 3000           # open the picker on a query instead
 ```
-
-The rule that makes the rest predictable: **a query answers and exits, a bare
-`swp` opens the picker.** So `swp 3000` prints and works in a pipeline with no
-flag for it, while `swp` alone browses. `-i` opens the picker on a query
-anyway.
 
 ## In the picker
 
